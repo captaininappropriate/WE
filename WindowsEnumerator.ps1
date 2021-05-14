@@ -1,6 +1,6 @@
 ﻿# Name        : Windows Enumerator
 # Author      : Greg Nimmo
-# Version     : 0.2
+# Version     : 0.3
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 
 
@@ -54,7 +54,7 @@ function Show-LocalSystemMenu{
         Write-Host "`t 'A' Accounts"
         Write-Host "`t 'B' Operating System"
         Write-Host "`t 'C' Network Configuration"
-        write-host "`t 'D' Registry"
+        write-host "`t 'D' Search Registry"
         Write-Host "`t 'Q' Quit"
         Write-Host "================================="
 
@@ -175,12 +175,29 @@ function Enumerate-LocalSystem{
         pause
         }
 
-
-
     elseif ($selection -eq 'D'){
-        # enumerate registry
-        Write-Host '--- Registry ---'
+        # search registry
+        Write-Host "--- Search Registry ---"
+        # array to hold search terms
+        $searchTermArray = @()
 
+        do {
+            $searchTerm = Read-Host 'Enter search term >>'
+            $searchTermArray += $searchTerm
+        } until ($searchTerm -eq '')
+
+        # HKCU registry hive
+        $hkcuKey = Get-ChildItem HKCU:\ -Recurse -ErrorAction SilentlyContinue
+
+        # loop through each key within the registry hive and search for the user defined terms
+        foreach ($key in $hkcuKey){
+            $searchKey = $key.Property
+            foreach ($searchTerm in $searchTermArray){
+                if ($searchKey -eq $searchTerm){
+                    Write-Host "`t[+] $key Contains $searchTerm"
+                }
+            }
+        }
         pause
     }
 
