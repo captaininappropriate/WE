@@ -1,8 +1,8 @@
 ﻿# Name        : Windows Enumerator
 # Author      : Greg Nimmo
-# Version     : 0.1
+# Version     : 0.2
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
-# Hint        : Set-ExecutionPolicy Unrestricted -Scope CurrentUser
+
 
 # main menu function
 function Show-MainMenu {
@@ -166,13 +166,20 @@ function Enumerate-LocalSystem{
         # enumerate listening and establed tcp / udp connections
         $localTCPPorts = Get-NetTcpConnection -State Listen, Established
         $localUDPPorts = Get-NetUDPEndpoint
+        
+        # enumerate firewall rules
+        Get-NetFirewallRule | Where { $_.Enabled –eq ‘True’ –and $_.Direction –eq ‘Inbound’} | Out-File 'inboundFirewallRules.txt'
+        Get-NetFirewallRule | Where { $_.Enabled –eq ‘True’ –and $_.Direction –eq ‘Outbound’} | Out-File 'outboundFirewallRules.txt'
+        Write-Host '[*] Firewall rules written to disk'
 
         pause
         }
 
+
+
     elseif ($selection -eq 'D'){
         # enumerate registry
-        Write-Host 'registry'
+        Write-Host '--- Registry ---'
 
         pause
     }
