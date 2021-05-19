@@ -1,6 +1,6 @@
 ﻿# Name        : Windows Enumerator
 # Author      : Greg Nimmo
-# Version     : 0.3
+# Version     : 0.4
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 
 
@@ -88,11 +88,12 @@ function Enumerate-LocalSystem{
         $allUsers = @(Get-LocalUser | select Name, Enabled)
         Write-Host '[*] Local User Accounts'
         foreach ($user in $allUsers){
-            "`t"+$user.Name + " : Enabled - " + $user.Enabled
+            "`t"+$user.Name + " : Enabled - " + $user.Enabled 
     
         }
-        # list all users home directory contents 
-        Get-ChildItem -Path C:\Users\$allUsers -Recurse
+        # list all users home directories and their contents which are accessible and save to log
+        Get-ChildItem -Path C:\Users\$allUsers -Recurse -OutVariable userFolders
+        $userFolders | Out-File -Append $logFile
         
         # enumerate all local groups
         Write-Host "[*] Local Groups"
@@ -113,7 +114,8 @@ function Enumerate-LocalSystem{
     elseif ($selection -eq 'B'){
         # enumerate operating system
         Write-Host '--- Operating System ---'
-        write-host "[*] Computer Name : $env:COMPUTERNAME"
+        write-host "[*] Computer Name : $env:COMPUTERNAME" -OutVariable hostName 
+        $hostName | Out-File -Append $logFile
 
         # enumeating OS details
         $operatingSystemName = (Get-WmiObject Win32_OperatingSystem).Caption
@@ -121,10 +123,11 @@ function Enumerate-LocalSystem{
         $operatingSystemBuild = (Get-WmiObject Win32_OperatingSystem).BuildNumber
         $operatingSystemArchitecture = (Get-WmiObject Win32_OperatingSystem).OSArchitecture
         Write-Host "[*] Operating System"
-        write-host "`tName : $operatingSystemName"
-        write-host "`tVersion : $operatingSystemVersion"
-        write-host "`tBuild : $operatingSystemBuild"
-        Write-Host "`t$operatingSystemArchitecture"
+        write-host "`tName : $operatingSystemName" -OutVariable osCaption
+        write-host "`tVersion : $operatingSystemVersion"-OutVariable osVersion
+        write-host "`tBuild : $operatingSystemBuild" -OutVariable osBuild
+        Write-Host "`t$operatingSystemArchitecture" -OutVariable osArchitecture
+        #"$osCaption `n$osVersion `n$osBuild `n$osArchitecture" | Out-File $logFile
 
         # enumerate hotfix and installed software
         # installed hotfixes
@@ -213,5 +216,8 @@ function Enumerate-LocalSystem{
 # end domain enumeration function
 
 # execute program
+# log file 
+$logFile = ${env:HOMEPATH} + "\$(Get-Date -Format 'yyyy-MM-dd')_WindowsEnumerator_log.txt"
+
 Show-MainMenu
 
