@@ -1,6 +1,6 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.6
+# Version     : 0.7 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 #             : enumeration assumes that that the Active Directory PowerShell module is not installed
 
@@ -102,7 +102,7 @@ function Enumerate-LocalSystem{
     if ($selection -eq 'A'){
         # enumerate local accounts
         '--- local Account Details ---' | Out-File -FilePath $localSystemLogFile -Append
-        '[*] Current User : $env:USERNAME' | Out-File -FilePath $localSystemLogFile -Append
+        "[*] Current User : $env:USERNAME" | Out-File -FilePath $localSystemLogFile -Append
 
         # enumerate all local users and identify enabled accounts
         $allUsers = @(Get-LocalUser | select Name, Enabled)
@@ -266,8 +266,8 @@ function Enumerate-Domain{
         # locate all domain controllers in the forest
         Write-Host 'Searching forest for domain controllers'
         '[*] Domain Controllers' | Out-File -FilePath $domainLogFile -Append
-        $Forest = [System.Directoryservices.ActiveDirectory.Forest]::GetCurrentForest()  
-        $Forest.Domains | ForEach-Object {$_.DomainControllers} |`
+        $forest = [System.Directoryservices.ActiveDirectory.Forest]::GetCurrentForest()  
+        $forest.Domains | ForEach-Object {$_.DomainControllers} |`
         ForEach-Object {
             $hostEntry= [System.Net.Dns]::GetHostByName($_.Name)
             New-Object -TypeName PSObject -Property @{
@@ -278,18 +278,20 @@ function Enumerate-Domain{
         | Select Name, IPAddress | Out-File -FilePath $domainLogFile -Append
 
         # enumerate domain joined computers
-        Write-Host 'Searching forest for domain joined computers'
         '[*] Domain Computers' | Out-File -FilePath $domainLogFile -Append
-
-        Write-Host "[*] Domain enumeration written to`n`t$domainLogFile"
-        pause
-    
+        Get-DomainObject('Computer')
     } 
     elseif ($selection -eq 'B'){
         # enumerate domain users and groups
+        "`n[*] Domain Users" | Out-File -FilePath $domainLogFile -Append
+        Get-DomainObject('User')
+        "`n[*] Domain Groups" | Out-File -FilePath $domainLogFile -Append
+        Get-DomainObject('Group')
+        
     }
     elseif ($selection -eq 'C'){
         #enumerate domain shares
+        #TODO
     }
     else{ # this shouldn't be reachable
         # exit Enumerate-Domain function
@@ -297,6 +299,45 @@ function Enumerate-Domain{
     }
 }
 # end domain enumeration function
+
+# start domain object search function
+function Get-DomainObject{
+    param(
+        [Parameter(Position=0,mandatory=$true)][string]$domainObject
+        )
+        $objectTypes = @('User','Group','Computer')
+        if ($domainObject | Where-Object { $_ -in $objectTypes }){
+            $forest = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
+            $domainList = @($forest.Domains)
+            $domains = $domainList | foreach { $_.name }
+            foreach ($domain in $domains)
+            {
+                $strFilter = "(objectCategory=$domainObject)"
+                $objDomain = New-Object System.DirectoryServices.DirectoryEntry
+                $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
+                $objSearcher.SearchRoot = $objDomain
+                $objSearcher.PageSize = 10000
+                $objSearcher.Filter = $strFilter
+                $objSearcher.SearchScope = "Subtree"
+                $colProplist = "name", "samaccountname"
+                foreach ($i in $colPropList)
+                {
+                    $objSearcher.PropertiesToLoad.Add($i)
+                }
+                $colResults = $objSearcher.FindAll()
+                $colResults
+                foreach ($objResult in $colResults){
+                    "`tsAMAccountName: " + $objResult.Properties.samaccountname | Out-File -FilePath $domainLogFile -Append
+                }
+            }
+        }
+        else{
+            break #either a User or Computer object should be passed each time
+        }
+
+
+}
+# end domain object search function
 
 # enumerate all function
     # create an array holding all valid options for Enumerate-LocalSystem and Enumerate-Domain
