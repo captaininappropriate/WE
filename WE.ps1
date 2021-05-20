@@ -1,7 +1,8 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.5
+# Version     : 0.6
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
+#             : enumeration assumes that that the Active Directory PowerShell module is not installed
 
 
 # main menu function
@@ -27,7 +28,7 @@ function Show-MainMenu {
                 continue
             }
             'B'{
-                Write-Host "`tDomain enumeration"
+                Show-DomainMenu
                 continue
             }
             'C'{
@@ -69,7 +70,26 @@ function Show-LocalSystemMenu{
 # end local system sub menu
 
 # start domain sub menu
+Function Show-DomainMenu{
+    param (
+        [string]$title = 'Domain enumeration'
+    )
+    do{
+        Clear-Host
+        Write-Host "`n========= $title ============"
+        Write-Host "`t 'A' Domain"
+        Write-Host "`t 'B' Domain Users and Groups"
+        Write-Host "`t 'C' Domain Shares"
+        Write-Host "`t 'Q' Quit"
+        Write-Host "=============================="
 
+        $domainMenuSelection = Read-Host '[*] >>> '
+
+        # pass argument to Enumerate-Domain function paramater 0
+        Enumerate-Domain($domainMenuSelection)
+
+    } while ($domainMenuSelection -ne 'Q')
+}
 # end domain sub menu
 
 # enumeration functions
@@ -185,7 +205,7 @@ function Enumerate-LocalSystem{
         Write-Host "[*] Firewall rules written to`n`t$firewallLog"
 
         pause
-        }
+    }
 
     elseif ($selection -eq 'D'){
         # search registry
@@ -222,13 +242,73 @@ function Enumerate-LocalSystem{
 # end local system enumeration function
 
 # domain enumeration
+function Enumerate-Domain{
+    param(
+        [Parameter(Position=0,mandatory=$true)][string]$selection
+        )
+    Clear-Host
+    if ($selection -eq 'A'){
+        # enumerate domain details
+        Write-Host 'Enumerating domain'
+        # get domain name
+        "[*} Domain Name : $env:USERDNSDOMAIN" | Out-File -FilePath $domainLogFile -Append
 
+        # get the domain SID
+        Write-Host 'Getting domain SID'
+        $userName = $env:USERNAME
+        $user = New-Object System.Security.Principal.NTAccount($username)
+        $sid = $user.Translate([System.Security.Principal.SecurityIdentifier])
+        $userSid = $sid.Value
+        $domainSidValues = @($userSid.Split("-")[0..6])
+        $domainSid = $domainSidValues -join '-'
+        "[*] Domain SID : $domainSid" | Out-File -FilePath $domainLogFile -Append
+
+        # locate all domain controllers in the forest
+        Write-Host 'Searching forest for domain controllers'
+        '[*] Domain Controllers' | Out-File -FilePath $domainLogFile -Append
+        $Forest = [System.Directoryservices.ActiveDirectory.Forest]::GetCurrentForest()  
+        $Forest.Domains | ForEach-Object {$_.DomainControllers} |`
+        ForEach-Object {
+            $hostEntry= [System.Net.Dns]::GetHostByName($_.Name)
+            New-Object -TypeName PSObject -Property @{
+                Name = $_.Name
+                IPAddress = $hostEntry.AddressList[0].IPAddressToString
+            }
+        }`
+        | Select Name, IPAddress | Out-File -FilePath $domainLogFile -Append
+
+        # enumerate domain joined computers
+        Write-Host 'Searching forest for domain joined computers'
+        '[*] Domain Computers' | Out-File -FilePath $domainLogFile -Append
+
+        Write-Host "[*] Domain enumeration written to`n`t$domainLogFile"
+        pause
+    
+    } 
+    elseif ($selection -eq 'B'){
+        # enumerate domain users and groups
+    }
+    elseif ($selection -eq 'C'){
+        #enumerate domain shares
+    }
+    else{ # this shouldn't be reachable
+        # exit Enumerate-Domain function
+        return
+    }
+}
 # end domain enumeration function
 
+# enumerate all function
+    # create an array holding all valid options for Enumerate-LocalSystem and Enumerate-Domain
+    # loop through the array executing each option
+    #$domainMenuArray = @('A','B','C')
+    #foreach ($value in $domainMenuArray){ Write-Host $value} execute function calls
+# end enumerate all function
+
 # execute program
-# log file 
+# log file locations (keeping things seperate to make life easier)
 $localSystemLogFile = ${env:USERPROFILE} + "\Documents\$(Get-Date -Format 'yyyy-MM-dd')_WE_localSystemLog.txt"
 $firewallLog = ${env:USERPROFILE} + "\Documents\$(Get-Date -Format 'yyyy-MM-dd')_WE_firewall_log.txt"
 $registryLog = ${env:USERPROFILE} + "\Documents\$(Get-Date -Format 'yyyy-MM-dd')_WE_registry_log.txt"
+$domainLogFile = ${env:USERPROFILE} + "\Documents\$(Get-Date -Format 'yyyy-MM-dd')_WE_DomainDetailsLog.txt"
 Show-MainMenu
-
