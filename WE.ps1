@@ -1,6 +1,6 @@
-﻿# Name        : Windows Enumerator
+﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.4
+# Version     : 0.5
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 
 
