@@ -6,6 +6,9 @@
 # TODO        : Search other registry hives, unquoted service paths, enumerate domain *admin groups, 
 #             : enumerate domain shares, create an enumerate all function
 
+$menuPadding = "=" * 10
+#$baseMenuPadding = ("=" * ((($menuPadding.Length + 1) * 2) + $title.Length)) # needs fixing length is incorrect
+
 # main menu function
 function Show-MainMenu {
     param (
@@ -13,12 +16,12 @@ function Show-MainMenu {
     )
     do {
         Clear-Host
-        Write-Host "`n========== $title =========="
-        Write-Host "`t 'A' Local system enumeration"
-        Write-Host "`t 'B' Domain enumeration"
+        Write-Host "`n$menuPadding $title $menuPadding"
+        Write-Host "`t 'A' Local system"
+        Write-Host "`t 'B' Domain"
         Write-Host "`t 'C' Enumerate all"
         Write-Host "`t 'Q' Quit"
-        Write-Host "================================="
+        Write-Host ("=" * ((($menuPadding.Length + 1) * 2) + $title.Length))
 
         # user input
         $mainSelection = Read-Host '[*] >>> '
@@ -48,17 +51,17 @@ function Show-MainMenu {
 # start local system sub menu
 function Show-LocalSystemMenu{
     param (
-        [string]$title = 'Local system enumeration'
+        [string]$title = 'Local System Enumeration'
     )
     do {
         Clear-Host
-        Write-Host "`n========== $title =========="
+        Write-Host "`n$menuPadding $title $menuPadding"
         Write-Host "`t 'A' Accounts"
         Write-Host "`t 'B' Operating System"
         Write-Host "`t 'C' Network Configuration"
         write-host "`t 'D' Search Registry"
         Write-Host "`t 'Q' Quit"
-        Write-Host "================================="
+        Write-Host ("=" * ((($menuPadding.Length + 1) * 2) + $title.Length))
 
         $localSystemSelection = Read-Host '[*] >>> '
 
@@ -73,16 +76,16 @@ function Show-LocalSystemMenu{
 # start domain sub menu
 Function Show-DomainMenu{
     param (
-        [string]$title = 'Domain enumeration'
+        [string]$title = 'Domain Enumeration'
     )
     do{
         Clear-Host
-        Write-Host "`n========= $title ============"
+        Write-Host "`n$menuPadding $title $menuPadding"
         Write-Host "`t 'A' Domain"
         Write-Host "`t 'B' Domain Users and Groups"
         Write-Host "`t 'C' Domain Shares"
         Write-Host "`t 'Q' Quit"
-        Write-Host "=============================="
+        Write-Host ("=" * ((($menuPadding.Length + 1) * 2) + $title.Length))
 
         $domainMenuSelection = Read-Host '[*] >>> '
 
@@ -129,7 +132,7 @@ function Enumerate-LocalSystem{
         foreach ($admin in $localAdmins){
             "`t`t$admin" | Out-File -FilePath $localSystemLogFile -Append
         }
-
+        Write-Host "`n[*] Account details written to `n`t$localSystemLogFile"
         pause
     }
 
@@ -160,11 +163,12 @@ function Enumerate-LocalSystem{
         Get-WMIObject -Query "SELECT * FROM Win32_Product" | FT Name, Vendor, Version, Caption | Out-File -FilePath $localSystemLogFile -Append
 
         # running services
-        '[*]Active Running Services' | Out-File -FilePath $localSystemLogFile -Append
+        '[*] Active Running Services' | Out-File -FilePath $localSystemLogFile -Append
         Get-Service | Where-Object {$_.Status -eq "Running"} | select Name, DisplayName | Out-File -FilePath $localSystemLogFile -Append
 
         # check for unquoted service paths
         #TODO
+        "[*] Operating system details written to `n`t$localSystemLogFile"
         pause
     }
 
@@ -288,6 +292,8 @@ function Enumerate-Domain{
         Get-DomainObject('User')
         "`n[*] Domain Groups" | Out-File -FilePath $domainLogFile -Append
         Get-DomainObject('Group')
+        pause # remove after testing
+        # enumerate domain *admin group membership
         
     }
     elseif ($selection -eq 'C'){
@@ -313,30 +319,32 @@ function Get-DomainObject{
             $domains = $domainList | foreach { $_.name }
             foreach ($domain in $domains)
             {
-                $strFilter = "(objectCategory=$domainObject)"
-                $objDomain = New-Object System.DirectoryServices.DirectoryEntry
-                $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
-                $objSearcher.SearchRoot = $objDomain
-                $objSearcher.PageSize = 10000
-                $objSearcher.Filter = $strFilter
-                $objSearcher.SearchScope = "Subtree"
-                $colProplist = "name", "samaccountname"
-                foreach ($i in $colPropList)
-                {
-                    $objSearcher.PropertiesToLoad.Add($i)
-                }
-                $colResults = $objSearcher.FindAll()
-                $colResults
-                foreach ($objResult in $colResults){
-                    "`tsAMAccountName: " + $objResult.Properties.samaccountname | Out-File -FilePath $domainLogFile -Append
+                $objSearcher=[adsisearcher]""
+                $objSearcher.Filter = "(objectClass=$domainObject)"
+                # extra properties just in case they become useful
+                $colProplist = "cn","distinguishedname","description","samaccountname"
+                foreach ($i in $colPropList){$objSearcher.PropertiesToLoad.Add($i) | out-null }
+                
+                $allObjects = $objSearcher.FindAll()
+                foreach ($obj in $allObjects) {     
+                    "`t" + ($obj.properties).samaccountname | Out-File -FilePath $domainLogFile -Append
                 }
             }
-        }
-        else{
-            break #either a User or Computer object should be passed each time
-        }
+            #search for only admin groups and dump members
+            if ($domainObject -eq 'Group'){
+                Write-Host '[*] Administrative Groups'
+                $objSearcher.Filter = "(&(objectClass=Group)(sAMAccountName=*Admin*))"
+                $colProplist = "samaccountname"
+                foreach ($i in $colPropList){$objSearcher.PropertiesToLoad.Add($i) | out-null }
+                
+                $allObjects = $objSearcher.FindAll()
+                foreach ($obj in $allObjects) {    
+                    write-host "`t" ($obj.properties).samaccountname
+                    # loop through each and dump members
+                }
+            }
 
-
+        }
 }
 # end domain object search function
 
