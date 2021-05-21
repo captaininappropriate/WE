@@ -1,9 +1,10 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.7 beta
+# Version     : 0.8 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 #             : enumeration assumes that that the Active Directory PowerShell module is not installed
-
+# TODO        : Search other registry hives, unquoted service paths, enumerate domain *admin groups, 
+#             : enumerate domain shares, create an enumerate all function
 
 # main menu function
 function Show-MainMenu {
