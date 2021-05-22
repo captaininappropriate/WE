@@ -1,6 +1,6 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.8 beta
+# Version     : 0.9 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 #             : enumeration assumes that that the Active Directory PowerShell module is not installed
 # TODO        : Search other registry hives, unquoted service paths, enumerate domain *admin groups, 
@@ -317,33 +317,65 @@ function Get-DomainObject{
             $forest = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
             $domainList = @($forest.Domains)
             $domains = $domainList | foreach { $_.name }
-            foreach ($domain in $domains)
-            {
-                $objSearcher=[adsisearcher]""
-                $objSearcher.Filter = "(objectClass=$domainObject)"
-                # extra properties just in case they become useful
-                $colProplist = "cn","distinguishedname","description","samaccountname"
-                foreach ($i in $colPropList){$objSearcher.PropertiesToLoad.Add($i) | out-null }
-                
-                $allObjects = $objSearcher.FindAll()
-                foreach ($obj in $allObjects) {     
-                    "`t" + ($obj.properties).samaccountname | Out-File -FilePath $domainLogFile -Append
-                }
-            }
-            #search for only admin groups and dump members
-            if ($domainObject -eq 'Group'){
-                Write-Host '[*] Administrative Groups'
-                $objSearcher.Filter = "(&(objectClass=Group)(sAMAccountName=*Admin*))"
-                $colProplist = "samaccountname"
-                foreach ($i in $colPropList){$objSearcher.PropertiesToLoad.Add($i) | out-null }
-                
-                $allObjects = $objSearcher.FindAll()
-                foreach ($obj in $allObjects) {    
-                    write-host "`t" ($obj.properties).samaccountname
-                    # loop through each and dump members
-                }
-            }
+            foreach ($domain in $domains){
+                # search filter based on supplied argument
+                $strFilter = "(objectCategory=$domainObject)"
 
+                # new directory searcher instance
+                $objDomain = New-Object System.DirectoryServices.DirectoryEntry
+                
+                # directory searcher object properties
+                $objSearcher = New-Object System.DirectoryServices.DirectorySearcher
+                $objSearcher.SearchRoot = $objDomain
+                $objSearcher.PageSize = 1000
+                $objSearcher.Filter = $strFilter
+                $objSearcher.SearchScope = "Subtree"
+
+                # properties to return
+                $colProplist = "samaccountname"
+                foreach ($i in $colPropList){$objSearcher.PropertiesToLoad.Add($i) | out-null}
+
+                # search active directory 
+                $colResults = $objSearcher.FindAll()
+                foreach ($objResult in $colResults){
+                    $objItem = $objResult.Properties; $objItem.samaccountname | Out-File -FilePath $domainLogFile -Append
+                }
+            } # end foreach loop
+
+            # if the arguemnt passed to the function is Group
+            if ($domainObject -eq 'Group'){
+                # create a new search filter for only administrator groups
+                "`n[*] Administrative Groups and Users" | Out-File -FilePath $domainLogFile -Append
+                $objSearcher.Filter = "(&(objectClass=Group)(sAMAccountName=*Admin*))"
+
+                # properties to return
+                $colProplist = "samaccountname"
+                foreach ($i in $colPropList){
+                    $objSearcher.PropertiesToLoad.Add($i) | out-null 
+                }
+                
+                # search active directory for only administrative groups
+                $allObjects = $objSearcher.FindAll()
+                foreach ($objResult in $colResults){
+                    $objItem = $objResult.Properties
+                    if ($objItem.samaccountname | Where-Object { $_ -like "*Admins*"}){
+                        "`t[+] " + $objItem.samaccountname | Out-File -FilePath $domainLogFile -Append
+                        # for each admin group found setup a ldap filter
+                        $adminGroup = $objItem.samaccountname
+                        $strFilter = "(&(ObjectClass=Group)(cn=$adminGroup))"
+                        
+                        # properties to return
+                        $colProplist = "member"
+                        foreach ($i in $colPropList){$objSearcher.PropertiesToLoad.Add($i) | out-null}
+                        
+                        # search active directory for group members
+                        $colResults = $objSearcher.FindAll()
+                        foreach ($objResult in $colResults){
+                            $objItem = $objResult.Properties; $objItem.member | Out-File -FilePath $domainLogFile -Append
+                        }
+                    }
+                }
+            } # end if 
         }
 }
 # end domain object search function
