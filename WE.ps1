@@ -1,6 +1,6 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.11 beta
+# Version     : 0.12 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 #             : enumeration assumes that that the Active Directory PowerShell module is not installed so 
 #             : its portable to any windows host with compatable powershell
@@ -138,7 +138,6 @@ function Enumerate-LocalSystem{
 
     elseif ($selection -eq 'B'){
         # enumerate operating system
-        Write-Host 'Enumerating operating system'
         '--- Operating System ---' | Out-File -FilePath $localSystemLogFile -Append
         "[*] Computer Name : $env:COMPUTERNAME" | Out-File -FilePath $localSystemLogFile -Append
 
@@ -175,7 +174,6 @@ function Enumerate-LocalSystem{
 
     elseif ($selection -eq 'C'){
         # enumerate network
-        Write-Host 'Enumerating network configuration'
         '--- Network Configuration ---' | Out-File -FilePath $localSystemLogFile -Append
         # enumerate IP v4 addresses
         $ipV4AddressList = (Get-NetIPAddress | Where-Object { $_.IPv4Address -ne $null }).IPv4Address
@@ -202,6 +200,7 @@ function Enumerate-LocalSystem{
         
         # output results
         Write-Host "[*] Network configuration written to`n`t$localSystemLogFile"
+
         # enumerate firewall rules
         '[*] Firewall rules'| Out-File -FilePath $firewallLog -Append
         "`tInbound Firewall rules" | Out-File -FilePath $firewallLog -Append
@@ -255,12 +254,10 @@ function Enumerate-Domain{
     Clear-Host
     if ($selection -eq 'A'){
         # enumerate domain details
-        Write-Host 'Enumerating domain'
         # get domain name
         "[*} Domain Name : $env:USERDNSDOMAIN" | Out-File -FilePath $domainLogFile -Append
 
         # get the domain SID
-        Write-Host 'Getting domain SID'
         $userName = $env:USERNAME
         $user = New-Object System.Security.Principal.NTAccount($username)
         $sid = $user.Translate([System.Security.Principal.SecurityIdentifier])
@@ -270,7 +267,6 @@ function Enumerate-Domain{
         "[*] Domain SID : $domainSid" | Out-File -FilePath $domainLogFile -Append
 
         # locate all domain controllers in the forest
-        Write-Host 'Searching forest for domain controllers'
         '[*] Domain Controllers' | Out-File -FilePath $domainLogFile -Append
         $forest = [System.Directoryservices.ActiveDirectory.Forest]::GetCurrentForest()  
         $forest.Domains | ForEach-Object {$_.DomainControllers} |`
@@ -280,9 +276,8 @@ function Enumerate-Domain{
                 Name = $_.Name
                 IPAddress = $hostEntry.AddressList[0].IPAddressToString
             }
-        }`
-        | Select Name, IPAddress | Out-File -FilePath $domainLogFile -Append
-
+        } |
+        Select-Object -property @{N='Domain Controller';E={$_.Name}}, IPAddress | Out-File -FilePath $domainLogFile -Append
     } 
     elseif ($selection -eq 'B'){
         # enumerate domain users and groups
@@ -290,7 +285,6 @@ function Enumerate-Domain{
         Get-DomainObject('User')
         "`n[*] Domain Groups" | Out-File -FilePath $domainLogFile -Append
         Get-DomainObject('Group')
-        # enumerate domain *admin group membership
         
     }
     elseif ($selection -eq 'C'){
@@ -358,6 +352,7 @@ function Get-DomainObject{
                     $objItem = $objResult.Properties
                     if ($objItem.samaccountname | Where-Object { $_ -like "*Admins*"}){
                         "`t[+] " + $objItem.samaccountname | Out-File -FilePath $domainLogFile -Append
+                        
                         # for each admin group found setup a ldap filter
                         $adminGroup = $objItem.samaccountname
                         $strFilter = "(&(ObjectClass=Group)(cn=$adminGroup))"
@@ -375,7 +370,7 @@ function Get-DomainObject{
                 }
             } # end if #domainObject is a Group
 
-            #else if domainObject is a computer
+            # if the argument passed to domainObject is computer
             elseif ($domainObject -eq 'Computer'){
                 # get all computers by samaccountname
                 "`n[*] Domain Computer Shares" | Out-File -FilePath $domainLogFile -Append
