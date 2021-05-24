@@ -1,9 +1,10 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.10 beta
+# Version     : 0.11 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
-#             : enumeration assumes that that the Active Directory PowerShell module is not installed
-# TODO        : Search other registry hives, unquoted service paths,enumerate domain shares, create an enumerate all function
+#             : enumeration assumes that that the Active Directory PowerShell module is not installed so 
+#             : its portable to any windows host with compatable powershell
+# TODO        : Search other registry hives, unquoted service paths, create an enumerate all function
 
 $menuPadding = "=" * 10
 #$baseMenuPadding = ("=" * ((($menuPadding.Length + 1) * 2) + $title.Length)) # needs fixing length is incorrect
@@ -165,8 +166,9 @@ function Enumerate-LocalSystem{
         '[*] Active Running Services' | Out-File -FilePath $localSystemLogFile -Append
         Get-Service | Where-Object {$_.Status -eq "Running"} | select Name, DisplayName | Out-File -FilePath $localSystemLogFile -Append
 
-        # check for unquoted service paths
         #TODO
+        # check for unquoted service paths
+   
         "[*] Operating system details written to `n`t$localSystemLogFile"
         pause
     }
@@ -281,9 +283,6 @@ function Enumerate-Domain{
         }`
         | Select Name, IPAddress | Out-File -FilePath $domainLogFile -Append
 
-        # enumerate domain joined computers
-        '[*] Domain Computers' | Out-File -FilePath $domainLogFile -Append
-        Get-DomainObject('Computer')
     } 
     elseif ($selection -eq 'B'){
         # enumerate domain users and groups
@@ -291,13 +290,13 @@ function Enumerate-Domain{
         Get-DomainObject('User')
         "`n[*] Domain Groups" | Out-File -FilePath $domainLogFile -Append
         Get-DomainObject('Group')
-        pause # remove after testing
         # enumerate domain *admin group membership
         
     }
     elseif ($selection -eq 'C'){
-        #enumerate domain shares
-        #TODO
+        # enumerate computers and shares
+        "`n[*] Domain Computers" | Out-File -FilePath $domainLogFile -Append
+        Get-DomainObject('Computer') 
     }
     else{ # this shouldn't be reachable
         # exit Enumerate-Domain function
@@ -306,7 +305,7 @@ function Enumerate-Domain{
 }
 # end domain enumeration function
 
-# start domain object search function
+# start domain object function
 function Get-DomainObject{
     param(
         [Parameter(Position=0,mandatory=$true)][string]$domainObject
@@ -374,16 +373,37 @@ function Get-DomainObject{
                         }
                     }
                 }
-            } # end if 
-        }
-}
-# end domain object search function
+            } # end if #domainObject is a Group
+
+            #else if domainObject is a computer
+            elseif ($domainObject -eq 'Computer'){
+                # get all computers by samaccountname
+                "`n[*] Domain Computer Shares" | Out-File -FilePath $domainLogFile -Append
+                foreach ($objResult in $colResults){
+                    $domainComputers = @($objItem = $objResult.Properties; $objItem.samaccountname)
+                    foreach($domainComputer in $domainComputers){
+                        # remove $ sign from the computer name so get-wmiobject doesn't fail
+                        foreach($domainComputer in $domainComputers){
+                            ForEach-Object{
+                                $domainComputer = $domainComputer.Substring(0,$($domainComputer.Length - 1))
+                                Get-WmiObject -Class Win32_Share -Property * -ComputerName $domainComputer 
+                                } |
+                                # rename a few columns to something more understandable and output the results
+                                Select-Object -property @{N='Hostname';E={$_.PSComputerName}}, @{N='Share';E={$_.Name}}, description | Out-File -FilePath $domainLogFile -Append
+                            } # end inner foreach-object
+                        } # end inner foreach
+                    } # end outer foreach       
+            } # end elseif
+        } # end outer if
+            #search the object for shares
+    }
+# end domain object function
 
 # enumerate all function
     # create an array holding all valid options for Enumerate-LocalSystem and Enumerate-Domain
     # loop through the array executing each option
     #$domainMenuArray = @('A','B','C')
-    #foreach ($value in $domainMenuArray){ Write-Host $value} execute function calls
+    #foreach ($value in $domainMenuArray){ xxxxx } execute function calls
 # end enumerate all function
 
 # execute program
