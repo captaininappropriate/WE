@@ -1,13 +1,12 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.12 beta
+# Version     : 0.13 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 #             : enumeration assumes that that the Active Directory PowerShell module is not installed so 
 #             : its portable to any windows host with compatable powershell
 # TODO        : Search other registry hives, unquoted service paths, create an enumerate all function
 
 $menuPadding = "=" * 10
-#$baseMenuPadding = ("=" * ((($menuPadding.Length + 1) * 2) + $title.Length)) # needs fixing length is incorrect
 
 # main menu function
 function Show-MainMenu {
@@ -167,7 +166,9 @@ function Enumerate-LocalSystem{
 
         #TODO
         # check for unquoted service paths
-   
+        # if the service doesnt comtain a " and contains a space flag as possible unquoted service path to review
+
+
         "[*] Operating system details written to `n`t$localSystemLogFile"
         pause
     }
