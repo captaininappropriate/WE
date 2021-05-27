@@ -131,7 +131,7 @@ function Enumerate-LocalSystem{
         foreach ($admin in $localAdmins){
             "`t`t$admin" | Out-File -FilePath $localSystemLogFile -Append
         }
-        Write-Host "`n[*] Account details written to `n`t$localSystemLogFile"
+        Write-Host "`n[+] Account details written to `n`t$localSystemLogFile"
         pause
     }
 
@@ -166,10 +166,11 @@ function Enumerate-LocalSystem{
 
         #TODO
         # check for unquoted service paths
+        # use a foreach loop to iterate through each value in the PathName searchfing for a space character
         # if the service doesnt comtain a " and contains a space flag as possible unquoted service path to review
 
 
-        "[*] Operating system details written to `n`t$localSystemLogFile"
+        "`t[+] Operating system details written to `n`t`t$localSystemLogFile"
         pause
     }
 
@@ -177,6 +178,7 @@ function Enumerate-LocalSystem{
         # enumerate network
         '--- Network Configuration ---' | Out-File -FilePath $localSystemLogFile -Append
         # enumerate IP v4 addresses
+        '[*] Enumerating network configuration, please wat...'
         $ipV4AddressList = (Get-NetIPAddress | Where-Object { $_.IPv4Address -ne $null }).IPv4Address
         '[*] IP v4 Addresses' | Out-File -FilePath $localSystemLogFile -Append
         foreach ($ipv4Address in $ipV4AddressList){
@@ -200,16 +202,11 @@ function Enumerate-LocalSystem{
         Get-NetUDPEndpoint | Out-File -FilePath $localSystemLogFile -Append
         
         # output results
-        Write-Host "[*] Network configuration written to`n`t$localSystemLogFile"
+        Write-Host "`t[+] IP addressing, routing table, and ports written to`n`t`t$localSystemLogFile"
 
         # enumerate firewall rules
-        '[*] Firewall rules'| Out-File -FilePath $firewallLog -Append
-        "`tInbound Firewall rules" | Out-File -FilePath $firewallLog -Append
-        Get-NetFirewallRule | Where { $_.Enabled –eq ‘True’ –and $_.Direction –eq ‘Inbound’} | Out-File -FilePath $firewallLog -Append
-        "`tOutbound Firewall rules" | Out-File -FilePath $firewallLog -Append
-        Get-NetFirewallRule | Where { $_.Enabled –eq ‘True’ –and $_.Direction –eq ‘Outbound’} | Out-File -FilePath $firewallLog -Append
-        Write-Host "[*] Firewall rules written to`n`t$firewallLog"
-
+        Get-LocalFirewallRules('Inbound')
+        Get-LocalFirewallRules('Outbound')
         pause
     }
 
@@ -236,7 +233,7 @@ function Enumerate-LocalSystem{
                 }
             }
         }
-        Write-Host "[*] Registry search results written to`n`t$registryLog"
+        Write-Host "`t[+] Registry search results written to`n`t`t$registryLog"
         pause
     }
 
@@ -246,6 +243,28 @@ function Enumerate-LocalSystem{
     }
 }
 # end local system enumeration function
+
+# start Get-LocalFirewallRules function
+function Get-LocalFirewallRules{
+    param(
+        [Parameter(Position=0,mandatory=$true)][string]$selection
+        )
+        "[*] Enumerating $selection firewall rules, please wait..."
+        "[*] $selection firewall rules" | Out-File -FilePath $firewallLog -Append
+        Get-NetFirewallRule | 
+        ForEach-Object {
+            if ($_.Enabled -eq 'True' -and $_.Direction -eq $selection){
+                "Display Name " + $_.DisplayName | Out-File -FilePath $firewallLog -Append 
+                "Description " + $_.Description | Out-File -FilePath $firewallLog -Append
+                "Action " + $_.Action | Out-File -FilePath $firewallLog -Append
+                $_ | Get-NetFirewallPortFilter | Out-File -FilePath $firewallLog -Append
+            }
+        }
+        Write-Host "`t[+] $selection firewall rules written to`n`t`t$firewallLog"
+}
+        
+
+# end Get-LocalFirewallRules function
 
 # domain enumeration
 function Enumerate-Domain{
