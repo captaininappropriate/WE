@@ -1,6 +1,6 @@
 ﻿# Name        : Windows Enumerator (WE)
 # Author      : Greg Nimmo
-# Version     : 0.13 beta
+# Version     : 0.14 beta
 # Description : Post exploitation script to automate common enumeration activities within a Windows envrionment
 #             : enumeration assumes that that the Active Directory PowerShell module is not installed so 
 #             : its portable to any windows host with compatable powershell
@@ -202,7 +202,7 @@ function Enumerate-LocalSystem{
         Get-NetUDPEndpoint | Out-File -FilePath $localSystemLogFile -Append
         
         # output results
-        Write-Host "`t[+] IP addressing, routing table, and ports written to`n`t`t$localSystemLogFile"
+        Write-Host "`t[+] IP addressing, routing table, listening and established ports written to`n`t`t$localSystemLogFile"
 
         # enumerate firewall rules
         Get-LocalFirewallRules('Inbound')
@@ -250,20 +250,21 @@ function Get-LocalFirewallRules{
         [Parameter(Position=0,mandatory=$true)][string]$selection
         )
         "[*] Enumerating $selection firewall rules, please wait..."
-        "[*] $selection firewall rules" | Out-File -FilePath $firewallLog -Append
+        "[*] $selection firewall rules`n" | Out-File -FilePath $firewallLog -Append
         Get-NetFirewallRule | 
         ForEach-Object {
             if ($_.Enabled -eq 'True' -and $_.Direction -eq $selection){
-                "Display Name " + $_.DisplayName | Out-File -FilePath $firewallLog -Append 
-                "Description " + $_.Description | Out-File -FilePath $firewallLog -Append
-                "Action " + $_.Action | Out-File -FilePath $firewallLog -Append
+                # create an array for the rule
+                $firewallRule = @($_.DisplayName, $_.Description, $_.Action)
+                # format the output
+                "Display Name " + $firewallRule[0] | Out-File -FilePath $firewallLog -Append 
+                "Description " + $firewallRule[1] | Out-File -FilePath $firewallLog -Append
+                "Action " + $firewallRule[2] | Out-File -FilePath $firewallLog -Append
                 $_ | Get-NetFirewallPortFilter | Out-File -FilePath $firewallLog -Append
             }
         }
         Write-Host "`t[+] $selection firewall rules written to`n`t`t$firewallLog"
 }
-        
-
 # end Get-LocalFirewallRules function
 
 # domain enumeration
