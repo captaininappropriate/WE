@@ -104,19 +104,22 @@ function Enumerate-LocalSystem{
     Clear-Host
     if ($selection -eq 'A'){
         # enumerate local accounts
-        '--- local Account Details ---' | Out-File -FilePath $localSystemLogFile -Append
+        '[*] Enumerating local system accoounts and groups.'
+        "--- local Account Details ---`n" | Out-File -FilePath $localSystemLogFile -Append
         "[*] Current User : $env:USERNAME" | Out-File -FilePath $localSystemLogFile -Append
 
-        # enumerate all local users and identify enabled accounts
-        $allUsers = @(Get-LocalUser | select Name, Enabled)
-        '[*] Local User Accounts' | Out-File $localSystemLogFile -Append
-        foreach ($user in $allUsers){
-            "`t"+$user.Name + " : Enabled - " + $user.Enabled | Out-File -FilePath $localSystemLogFile -Append
-    
-        }
+        # enumerate all local users and identify enabled accounts 
+        '[*] Enumerating enabled local user accounts' | Out-File -FilePath $localSystemLogFile -Append
+        $allUsers = @(Get-LocalUser | select Name, Description, Enabled, PasswordLastSet, LastLogon)
+        $allUsers |
+        ForEach-Object { 
+            if ($_.Enabled -eq 'True'){
+                $_ | Out-File -FilePath $localSystemLogFile -Append
+            }
+        } 
         # list all users home directories and their contents which are accessible and save to log
         '[*] Local Users Home Directory Contents' | Out-File -FilePath $localSystemLogFile -Append
-        Get-ChildItem -Path C:\Users\$allUsers -Recurse -OutVariable userFolders
+        Get-ChildItem -Path C:\Users\$allUsers -Recurse -OutVariable userFolders -ErrorAction SilentlyContinue
         $userFolders | Out-File -FilePath $localSystemLogFile -Append
         
         # enumerate all local groups
@@ -131,12 +134,13 @@ function Enumerate-LocalSystem{
         foreach ($admin in $localAdmins){
             "`t`t$admin" | Out-File -FilePath $localSystemLogFile -Append
         }
-        Write-Host "`n[+] Account details written to `n`t$localSystemLogFile"
+        Write-Host "`n[+] Account details written to:`n`t$localSystemLogFile"
         pause
     }
 
     elseif ($selection -eq 'B'){
         # enumerate operating system
+        '[*] Enumerating operating system details.'
         '--- Operating System ---' | Out-File -FilePath $localSystemLogFile -Append
         "[*] Computer Name : $env:COMPUTERNAME" | Out-File -FilePath $localSystemLogFile -Append
 
@@ -153,16 +157,37 @@ function Enumerate-LocalSystem{
    
         # enumerate hotfix and installed software
         # installed hotfixes
+        '[*] Enumerating hostfixes and installed software.'
         '[*] Installed Hotfixes and Software' | Out-File -FilePath $localSystemLogFile -Append
         "`tHotfixes`n" | Out-File -FilePath $localSystemLogFile -Append
         (Get-HotFix -ComputerName $env:COMPUTERNAME) | Out-File -FilePath $localSystemLogFile -Append
+        
         # installed software
         "`tSoftware Packages`n" | Out-File -FilePath $localSystemLogFile -Append
         Get-WMIObject -Query "SELECT * FROM Win32_Product" | FT Name, Vendor, Version, Caption | Out-File -FilePath $localSystemLogFile -Append
 
-        # running services
+        # active services
+        '[*] Enumerating running services and processes.'
         '[*] Active Running Services' | Out-File -FilePath $localSystemLogFile -Append
-        Get-Service | Where-Object {$_.Status -eq "Running"} | select Name, DisplayName | Out-File -FilePath $localSystemLogFile -Append
+        Get-Service |
+        Where-Object {
+            $_.Status -eq "Running"
+        } | select Name, DisplayName | Out-File -FilePath $localSystemLogFile -Append
+
+
+        # get all processes and the user who has spawned it. PowerShell cmdlets require admin privs so to get around this issue i'm using WMI
+        '[*] Running Processes' | Out-File -FilePath $localSystemLogFile -Append
+        $processOwners = @{}
+        Get-WmiObject Win32_Process | Where-Object {$processOwners[$_.handle] = $_.getowner().user}
+        $allProcess = Get-Process | select processname,Id,@{l="Owner";e={$processOwners[$_.id.tostring()]}}
+        foreach($process in $allProcess) {
+            if($process.Owner -eq $env:USERNAME) {
+                $process | Out-File -FilePath $localSystemLogFile -Append
+            }
+        }
+### cached wifi passwords
+
+### unquoted service paths
 
         #TODO
         # check for unquoted service paths
@@ -178,7 +203,7 @@ function Enumerate-LocalSystem{
         # enumerate network
         '--- Network Configuration ---' | Out-File -FilePath $localSystemLogFile -Append
         # enumerate IP v4 addresses
-        '[*] Enumerating network configuration, please wat...'
+        '[*] Enumerating network configuration.'
         $ipV4AddressList = (Get-NetIPAddress | Where-Object { $_.IPv4Address -ne $null }).IPv4Address
         '[*] IP v4 Addresses' | Out-File -FilePath $localSystemLogFile -Append
         foreach ($ipv4Address in $ipV4AddressList){
@@ -249,7 +274,7 @@ function Get-LocalFirewallRules{
     param(
         [Parameter(Position=0,mandatory=$true)][string]$selection
         )
-        "[*] Enumerating $selection firewall rules, please wait..."
+        "[*] Enumerating $selection firewall rules."
         "[*] $selection firewall rules`n" | Out-File -FilePath $firewallLog -Append
         Get-NetFirewallRule | 
         ForEach-Object {
