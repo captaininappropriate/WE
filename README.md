@@ -1,4 +1,6 @@
-Windows Enumerator (WE) A tool for automating common enumeration activities within a Windows environment 
+#Windows Enumerator (WE) 
+
+A tool for automating common enumeration activities within a Windows environment 
 
 This was written to be used on any Windows computer with PowerShell and as such does not require the RSAT Active Directory module for PowerShell
 TODO: 
